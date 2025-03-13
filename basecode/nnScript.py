@@ -21,12 +21,31 @@ def initializeWeights(n_in, n_out):
     return W
 
 
+
+
+
+
+
+
+
+####################################################################################################################################
+
 def sigmoid(z):
     """# Notice that z can be a scalar, a vector or a matrix
     # return the sigmoid of input z"""
 
-    return  # your code here
+    return 1.0 / (1.0 + np.exp(-z))  #sigmoid formula
 
+####################################################################################################################################
+
+
+
+
+
+
+
+
+####################################################################################################################################
 
 def preprocess():
     """ Input:
@@ -55,14 +74,75 @@ def preprocess():
     # Split the training sets into two sets of 50000 randomly sampled training examples and 10000 validation examples. 
     # Your code here.
     
-
+    #init empty arrays
+    train_data = np.zeros((0, 784))
+    train_label = np.zeros(0)
+    validation_data = np.zeros((0, 784))
+    validation_label = np.zeros(0)
+    test_data = np.zeros((0, 784))
+    test_label = np.zeros(0)
+    
+    #loop thru each digit (0-9)
+    for i in range(10):
+        digit_train = mat['train' + str(i)]
+        n_samples = digit_train.shape[0]
+        
+        #shuffle idx
+        idx = np.random.permutation(n_samples)
+        
+        #calc train validation split
+        train_count = int(0.83 * n_samples)  #approx 83% for train
+        
+        #split into train/valid
+        train_idx = idx[:train_count]
+        valid_idx = idx[train_count:]
+        
+        #add to final datasets
+        train_data = np.vstack((train_data, digit_train[train_idx]))
+        train_label = np.append(train_label, np.ones(len(train_idx)) * i)
+        
+        validation_data = np.vstack((validation_data, digit_train[valid_idx]))
+        validation_label = np.append(validation_label, np.ones(len(valid_idx)) * i)
+        
+        #add test data
+        test_digit = mat['test' + str(i)]
+        test_data = np.vstack((test_data, test_digit))
+        test_label = np.append(test_label, np.ones(test_digit.shape[0]) * i)
+    
     # Feature selection
     # Your code here.
+    
+    #find features that vary (non-constant)
+    feature_variance = np.var(train_data, axis=0)
+    selected_features = np.where(feature_variance > 0)[0]
+    
+    #keep only useful features
+    train_data = train_data[:, selected_features]
+    validation_data = validation_data[:, selected_features]
+    test_data = test_data[:, selected_features]
+    
+    #normalize data to 0-1 range
+    train_data = train_data / 255.0
+    validation_data = validation_data / 255.0
+    test_data = test_data / 255.0
 
     print('preprocess done')
 
     return train_data, train_label, validation_data, validation_label, test_data, test_label
 
+####################################################################################################################################
+
+
+
+
+
+
+
+
+
+
+
+####################################################################################################################################
 
 def nnObjFunction(params, *args):
     """% nnObjFunction computes the value of objective function (negative log 
@@ -114,16 +194,77 @@ def nnObjFunction(params, *args):
     #
     #
     #
-
-
-
-    # Make sure you reshape the gradient matrices to a 1D array. for instance if your gradient matrices are grad_w1 and grad_w2
-    # you would use code similar to the one below to create a flat array
-    # obj_grad = np.concatenate((grad_w1.flatten(), grad_w2.flatten()),0)
-    obj_grad = np.array([])
+    
+    #get num of samples
+    n = training_data.shape[0]
+    
+    #add bias to input
+    input_with_bias = np.hstack((training_data, np.ones((n, 1))))
+    
+    #convert labels to one-hot encoding
+    y = np.zeros((n, n_class))
+    for i in range(n):
+        y[i, int(training_label[i])] = 1
+    
+    #feedforward - hidden layer
+    hidden_layer_input = np.dot(input_with_bias, w1.T)
+    hidden_layer_output = sigmoid(hidden_layer_input)
+    
+    #add bias to hidden layer output
+    hidden_with_bias = np.hstack((hidden_layer_output, np.ones((n, 1))))
+    
+    #feedforward - output layer
+    output_layer_input = np.dot(hidden_with_bias, w2.T)
+    output_layer_output = sigmoid(output_layer_input)
+    
+    #calc error - neg log likelihood
+    error = -1 * np.sum(y * np.log(output_layer_output) + 
+                      (1 - y) * np.log(1 - output_layer_output)) / n
+    
+    #add regularization term
+    reg_term = (np.sum(np.square(w1)) + np.sum(np.square(w2))) * lambdaval / (2 * n)
+    obj_val = error + reg_term
+    
+    #backprop - calc output layer error
+    delta_output = output_layer_output - y  #simple derivation from error func
+    
+    #backprop - calc hidden layer error
+    delta_hidden = np.dot(delta_output, w2[:, :-1]) * hidden_layer_output * (1 - hidden_layer_output)
+    
+    #calc gradients
+    grad_w2 = np.dot(delta_output.T, hidden_with_bias) / n
+    grad_w1 = np.dot(delta_hidden.T, input_with_bias) / n
+    
+    #add regularization to gradients
+    grad_w2 += lambdaval * w2 / n
+    grad_w1 += lambdaval * w1 / n
+    
+    #flatten gradients into single vector
+    obj_grad = np.concatenate((grad_w1.flatten(), grad_w2.flatten()), 0)
 
     return (obj_val, obj_grad)
 
+####################################################################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+####################################################################################################################################
 
 def nnPredict(w1, w2, data):
     """% nnPredict predicts the label of data given the parameter w1, w2 of Neural
@@ -144,8 +285,37 @@ def nnPredict(w1, w2, data):
 
     labels = np.array([])
     # Your code here
+    
+    #add bias to input
+    n = data.shape[0]
+    input_with_bias = np.hstack((data, np.ones((n, 1))))
+    
+    #feedforward - hidden layer
+    hidden_layer_input = np.dot(input_with_bias, w1.T)
+    hidden_layer_output = sigmoid(hidden_layer_input)
+    
+    #add bias to hidden layer
+    hidden_with_bias = np.hstack((hidden_layer_output, np.ones((n, 1))))
+    
+    #feedforward - output layer
+    output_layer_input = np.dot(hidden_with_bias, w2.T)
+    output_layer_output = sigmoid(output_layer_input)
+    
+    #get predictions - class with highest prob
+    labels = np.argmax(output_layer_output, axis=1)
 
     return labels
+
+####################################################################################################################################
+
+
+
+
+
+
+
+
+
 
 
 """**************Neural Network Script Starts here********************************"""
