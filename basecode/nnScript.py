@@ -231,10 +231,13 @@ def nnObjFunction(params, *args):
     #####################################################
 
 
-    #add regularization
+    #add regularization (excluding bias weights)
     #####################################################
-    #reg_term = (lambda/2n) * (sum of squared weights)
-    reg_term = (lambdaval/(2*n)) * (np.sum(np.square(w1)) + np.sum(np.square(w2)))
+    #reg_term = (lambda/2n) * (sum of squared weights excluding bias)
+    w1_no_bias = w1[:, :-1]  
+    w2_no_bias = w2[:, :-1] 
+    
+    reg_term = (lambdaval/(2*n)) * (np.sum(np.square(w1_no_bias)) + np.sum(np.square(w2_no_bias)))
     obj_val = error + reg_term
     #####################################################
     
@@ -255,14 +258,26 @@ def nnObjFunction(params, *args):
     #calculate gradients
     #####################################################
     #gradient = (input.T * delta)/n + regularization
-    grad_w2 = (np.dot(delta_output.T, hidden_with_bias) + lambdaval * w2) / n
-    grad_w1 = (np.dot(delta_hidden.T, input_with_bias) + lambdaval * w1) / n
+    
+    #w2 gradient
+    grad_w2 = np.dot(delta_output.T, hidden_with_bias) / n
+    
+    # regularization term excluding bias weights
+    grad_w2_reg = grad_w2.copy()
+    grad_w2_reg[:, :-1] = grad_w2[:, :-1] + (lambdaval/n) * w2[:, :-1]
+    
+    # for w1 gradient
+    grad_w1 = np.dot(delta_hidden.T, input_with_bias) / n
+    
+    # add regularization term excluding bias 
+    grad_w1_reg = grad_w1.copy()
+    grad_w1_reg[:, :-1] = grad_w1[:, :-1] + (lambdaval/n) * w1[:, :-1]
     #####################################################
     
 
     #combine gradients into single vector
     #####################################################
-    obj_grad = np.concatenate((grad_w1.flatten(), grad_w2.flatten()), 0)
+    obj_grad = np.concatenate((grad_w1_reg.flatten(), grad_w2_reg.flatten()), 0)
     #####################################################
 
 
