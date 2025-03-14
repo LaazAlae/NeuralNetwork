@@ -74,45 +74,45 @@ def preprocess():
     # Split the training sets into two sets of 50000 randomly sampled training examples and 10000 validation examples. 
     # Your code here.
     
-    #init empty arrays
-    train_data = np.zeros((0, 784))
-    train_label = np.zeros(0)
-    validation_data = np.zeros((0, 784))
-    validation_label = np.zeros(0)
-    test_data = np.zeros((0, 784))
-    test_label = np.zeros(0)
+    #init empty lists
+    all_train_data = []
+    all_train_labels = []
+    test_data = []
+    test_label = []
     
-    #loop thru each digit (0-9)
-    for i in range(10):
-        digit_train = mat['train' + str(i)]
-        n_samples = digit_train.shape[0]
+    #loop thru digits 0-9
+    for digit in range(10):
+        #grab data for this digit
+        digit_examples = mat['train' + str(digit)]
+        #save training examples
+        all_train_data.append(digit_examples)
+        #create same-value labels
+        all_train_labels.append(np.ones(len(digit_examples)) * digit)
         
-        #shuffle idx
-        idx = np.random.permutation(n_samples)
-        
-        #calc train validation split
-        train_count = int(0.83 * n_samples)  #approx 83% for train
-        
-        #split into train/valid
-        train_idx = idx[:train_count]
-        valid_idx = idx[train_count:]
-        
-        #add to final datasets
-        train_data = np.vstack((train_data, digit_train[train_idx]))
-        train_label = np.append(train_label, np.ones(len(train_idx)) * i)
-        
-        validation_data = np.vstack((validation_data, digit_train[valid_idx]))
-        validation_label = np.append(validation_label, np.ones(len(valid_idx)) * i)
-        
-        #add test data
-        test_digit = mat['test' + str(i)]
-        test_data = np.vstack((test_data, test_digit))
-        test_label = np.append(test_label, np.ones(test_digit.shape[0]) * i)
+        #same for test data
+        test_examples = mat['test' + str(digit)]
+        test_data.append(test_examples)
+        test_label.append(np.ones(len(test_examples)) * digit)
     
+    #stack everything into arrays
+    all_train_data = np.vstack(all_train_data)
+    all_train_labels = np.hstack(all_train_labels)
+    test_data = np.vstack(test_data)
+    test_label = np.hstack(test_label)
+    
+    #shuffle training data
+    shuffle_idx = np.random.permutation(len(all_train_data))
+    
+    #split into train/valid sets
+    train_data = all_train_data[shuffle_idx[:50000]]
+    train_label = all_train_labels[shuffle_idx[:50000]]
+    validation_data = all_train_data[shuffle_idx[50000:60000]]
+    validation_label = all_train_labels[shuffle_idx[50000:60000]]
+
     # Feature selection
     # Your code here.
     
-    #find features that vary (non-constant)
+    #find non-constant features
     feature_variance = np.var(train_data, axis=0)
     selected_features = np.where(feature_variance > 0)[0]
     
@@ -121,10 +121,10 @@ def preprocess():
     validation_data = validation_data[:, selected_features]
     test_data = test_data[:, selected_features]
     
-    #normalize data to 0-1 range
-    train_data = train_data / 255.0
-    validation_data = validation_data / 255.0
-    test_data = test_data / 255.0
+    #normalize to 0-1
+    train_data = train_data/255.0
+    validation_data = validation_data/255.0
+    test_data = test_data/255.0
 
     print('preprocess done')
 
@@ -171,16 +171,7 @@ def nnObjFunction(params, *args):
     % obj_grad: a SINGLE vector of gradient value of error function
     % NOTE: how to compute obj_grad
     % Use backpropagation algorithm to compute the gradient of error function
-    % for each weights in weight matrices.
-
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % reshape 'params' vector into 2 matrices of weight w1 and w2
-    % w1: matrix of weights of connections from input layer to hidden layers.
-    %     w1(i, j) represents the weight of connection from unit j in input 
-    %     layer to unit i in hidden layer.
-    % w2: matrix of weights of connections from hidden layer to output layers.
-    %     w2(i, j) represents the weight of connection from unit j in hidden 
-    %     layer to unit i in output layer."""
+    % for each weights in weight matrices."""
 
     n_input, n_hidden, n_class, training_data, training_label, lambdaval = args
 
@@ -189,58 +180,91 @@ def nnObjFunction(params, *args):
     obj_val = 0
 
     # Your code here
-    #
-    #
-    #
-    #
-    #
-    
-    #get num of samples
+
+    #get number of samples
     n = training_data.shape[0]
     
-    #add bias to input
-    input_with_bias = np.hstack((training_data, np.ones((n, 1))))
+    #create bias column (fill w 1s)
+    bias = np.ones(n)
     
-    #convert labels to one-hot encoding
-    y = np.zeros((n, n_class))
+    #add bias to training data
+    input_with_bias = np.column_stack([training_data, bias])
+    
+
+    #feedforward to hidden layer
+    #####################################################
+    #multiply inputs with weights
+    hidden_inputs = np.dot(input_with_bias, w1.T)
+    #apply activation function
+    hidden_outputs = sigmoid(hidden_inputs)
+    
+    #add bias to hidden layer outputs
+    hidden_with_bias = np.column_stack([hidden_outputs, bias])
+    #####################################################
+
+
+    #feedforward to output layer
+    #####################################################
+    #multiply hidden outputs with weights
+    output_inputs = np.dot(hidden_with_bias, w2.T)
+    #apply activation function
+    output_final = sigmoid(output_inputs)
+    #####################################################
+
+
+    #prepare true labels matrix
+    #####################################################
+    true_labels = np.zeros((n, n_class))
     for i in range(n):
-        y[i, int(training_label[i])] = 1
-    
-    #feedforward - hidden layer
-    hidden_layer_input = np.dot(input_with_bias, w1.T)
-    hidden_layer_output = sigmoid(hidden_layer_input)
-    
-    #add bias to hidden layer output
-    hidden_with_bias = np.hstack((hidden_layer_output, np.ones((n, 1))))
-    
-    #feedforward - output layer
-    output_layer_input = np.dot(hidden_with_bias, w2.T)
-    output_layer_output = sigmoid(output_layer_input)
-    
-    #calc error - neg log likelihood
-    error = -1 * np.sum(y * np.log(output_layer_output) + 
-                      (1 - y) * np.log(1 - output_layer_output)) / n
-    
-    #add regularization term
-    reg_term = (np.sum(np.square(w1)) + np.sum(np.square(w2))) * lambdaval / (2 * n)
+        #set 1 at position of correct class
+        true_labels[i, int(training_label[i])] = 1
+    #####################################################
+
+
+    #calculate error
+    #####################################################
+    #for each example -[y*log(o) + (1-y)*log(1-o)]
+    pos_term = true_labels * np.log(output_final)
+    neg_term = (1 - true_labels) * np.log(1 - output_final)
+    error_matrix = pos_term + neg_term
+    error = -np.sum(error_matrix) / n
+    #####################################################
+
+
+    #add regularization
+    #####################################################
+    #reg_term = (lambda/2n) * (sum of squared weights)
+    reg_term = (lambdaval/(2*n)) * (np.sum(np.square(w1)) + np.sum(np.square(w2)))
     obj_val = error + reg_term
+    #####################################################
     
-    #backprop - calc output layer error
-    delta_output = output_layer_output - y  #simple derivation from error func
+
+    #backpropagation
+    #####################################################
+    #output layer error
+    delta_output = output_final - true_labels
     
-    #backprop - calc hidden layer error
-    delta_hidden = np.dot(delta_output, w2[:, :-1]) * hidden_layer_output * (1 - hidden_layer_output)
+    #backpropagate to hidden layer
+    #error * weights * derivative of sigmoid
+    delta_hidden_with_bias = np.dot(delta_output, w2) * (hidden_with_bias * (1 - hidden_with_bias))
+    #remove bias error
+    delta_hidden = delta_hidden_with_bias[:, :-1]
+    #####################################################
     
-    #calc gradients
-    grad_w2 = np.dot(delta_output.T, hidden_with_bias) / n
-    grad_w1 = np.dot(delta_hidden.T, input_with_bias) / n
+
+    #calculate gradients
+    #####################################################
+    #gradient = (input.T * delta)/n + regularization
+    grad_w2 = (np.dot(delta_output.T, hidden_with_bias) + lambdaval * w2) / n
+    grad_w1 = (np.dot(delta_hidden.T, input_with_bias) + lambdaval * w1) / n
+    #####################################################
     
-    #add regularization to gradients
-    grad_w2 += lambdaval * w2 / n
-    grad_w1 += lambdaval * w1 / n
-    
-    #flatten gradients into single vector
+
+    #combine gradients into single vector
+    #####################################################
     obj_grad = np.concatenate((grad_w1.flatten(), grad_w2.flatten()), 0)
+    #####################################################
+
 
     return (obj_val, obj_grad)
 
@@ -285,7 +309,7 @@ def nnPredict(w1, w2, data):
 
     labels = np.array([])
     # Your code here
-    
+
     #add bias to input
     n = data.shape[0]
     input_with_bias = np.hstack((data, np.ones((n, 1))))
