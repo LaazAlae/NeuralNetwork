@@ -2,6 +2,9 @@ import numpy as np
 from scipy.optimize import minimize
 from scipy.io import loadmat
 from math import sqrt
+import pickle
+import matplotlib.pyplot as plt
+import time
 
 
 def initializeWeights(n_in, n_out):
@@ -422,3 +425,122 @@ if __name__ == "__main__":
     print('\n Test set Accuracy:' + str(100 * np.mean((predicted_label == test_label).astype(float))) + '%')
 
 
+
+
+
+
+
+
+
+
+
+# Hyperparam tuning
+####################################################################################################################################
+#test diff hidden units & lambda vals
+hidden_units = [4, 8, 12, 16, 20] 
+lambda_values = [0, 10, 20, 30, 40, 50] 
+
+#store results
+val_acc = np.zeros((len(hidden_units), len(lambda_values)))
+train_times = np.zeros((len(hidden_units), len(lambda_values)))
+
+print("Starting hyperparameter tuning...")
+#try all combos
+for i, n_hidden in enumerate(hidden_units):
+    for j, lambdaval in enumerate(lambda_values):
+        print(f"Testing h={n_hidden}, lambda={lambdaval}")
+        
+        #init weights
+        initial_w1 = initializeWeights(n_input, n_hidden)
+        initial_w2 = initializeWeights(n_hidden, n_class)
+        initialWeights = np.concatenate((initial_w1.flatten(), initial_w2.flatten()), 0)
+        
+        #setup args
+        args = (n_input, n_hidden, n_class, train_data, train_label, lambdaval)
+        
+        #time the training
+        import time
+        start = time.time()
+        opts = {'maxiter': 50}
+        nn_params = minimize(nnObjFunction, initialWeights, jac=True, args=args, method='CG', options=opts)
+        end = time.time()
+        train_times[i, j] = end - start
+        
+        #get weights
+        w1 = nn_params.x[0:n_hidden * (n_input + 1)].reshape((n_hidden, (n_input + 1)))
+        w2 = nn_params.x[(n_hidden * (n_input + 1)):].reshape((n_class, (n_hidden + 1)))
+        
+        #calc validation acc
+        pred = nnPredict(w1, w2, validation_data)
+        acc = 100 * np.mean((pred == validation_label).astype(float))
+        val_acc[i, j] = acc
+        
+        print(f"Val acc: {acc:.2f}%, Time: {train_times[i, j]:.2f}s")
+
+#find best params
+best_idx = np.unravel_index(np.argmax(val_acc), val_acc.shape)
+best_hidden = hidden_units[best_idx[0]]
+best_lambda = lambda_values[best_idx[1]]
+
+print(f"Best params: h={best_hidden}, lambda={best_lambda}, acc={val_acc[best_idx]:.2f}%")
+
+#plot results for video
+import matplotlib.pyplot as plt
+plt.figure(figsize=(10, 4))
+
+#plot1: lambda vs acc
+plt.subplot(1, 2, 1)
+for i, h in enumerate(hidden_units):
+    plt.plot(lambda_values, val_acc[i], 'o-', label=f'{h} units')
+plt.xlabel('Lambda')
+plt.ylabel('Accuracy (%)')
+plt.title('Lambda effect on accuracy')
+plt.legend()
+plt.grid(True)
+
+#plot2: hidden units vs time
+plt.subplot(1, 2, 2)
+avg_time = np.mean(train_times, axis=1)
+plt.plot(hidden_units, avg_time, 'o-')
+plt.xlabel('Hidden Units')
+plt.ylabel('Time (s)')
+plt.title('Training time vs hidden units')
+plt.grid(True)
+
+plt.tight_layout()
+plt.savefig('tuning_results.png')
+
+#train final model w best params
+print("Training final model...")
+initial_w1 = initializeWeights(n_input, best_hidden)
+initial_w2 = initializeWeights(best_hidden, n_class)
+initialWeights = np.concatenate((initial_w1.flatten(), initial_w2.flatten()), 0)
+
+args = (n_input, best_hidden, n_class, train_data, train_label, best_lambda)
+nn_params = minimize(nnObjFunction, initialWeights, jac=True, args=args, method='CG', options=opts)
+
+#extract final weights
+w1 = nn_params.x[0:best_hidden * (n_input + 1)].reshape((best_hidden, (n_input + 1)))
+w2 = nn_params.x[(best_hidden * (n_input + 1)):].reshape((n_class, (best_hidden + 1)))
+
+#test final model
+train_acc = 100 * np.mean((nnPredict(w1, w2, train_data) == train_label).astype(float))
+valid_acc = 100 * np.mean((nnPredict(w1, w2, validation_data) == validation_label).astype(float))
+test_acc = 100 * np.mean((nnPredict(w1, w2, test_data) == test_label).astype(float))
+
+print(f"Train acc: {train_acc:.2f}%")
+print(f"Valid acc: {valid_acc:.2f}%")
+print(f"Test acc: {test_acc:.2f}%")
+
+#save params for submission
+selected_features = np.where(np.var(train_data, axis=0) > 0)[0]
+params = {
+    'selected_features': selected_features,
+    'optimal_n_hidden': best_hidden,
+    'w1': w1,
+    'w2': w2,
+    'optimal_lambda': best_lambda
+}
+
+with open('params.pickle', 'wb') as f:
+    pickle.dump(params, f)
